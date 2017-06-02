@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Outback Login</title>
+    </head>
+    <body>
+        <form method="POST" action="{{.URL}}">
+            {{ if .Message }}<p>{{.Message}}</p>{{ end }}
+            <input type="text" name="user" placeholder="Username" value="" /><br>
+            <input type="password" name="password" placeholder="Password" value="" /><br>
+            <input type="hidden" name="SAMLRequest" value="{{.SAMLRequest}}" />
+            <input type="hidden" name="RelayState" value="{{.RelayState}}" />
+            <input type="submit" value="Login" />
+        </form>
+    </body>
+</html>

@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Outback IDP Initiated</title>
+    </head>
+    <body>
+        {{ range $key, $hash := .SPs }}
+        Key: {{ $key }}<br>
+        <a href="/idpinit/{{ $hash }}">Start Login</a>
+        <hr>
+        {{ end }}
+    </body>
+</html>
