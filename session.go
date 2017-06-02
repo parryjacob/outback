@@ -122,8 +122,6 @@ func (osp *OutbackSessionProvider) GetSession(w http.ResponseWriter, r *http.Req
 		username := r.PostForm.Get("user")
 		password := r.PostForm.Get("password")
 
-		log.WithField("username", username).Debug("attempting user login")
-
 		ldapuser, err := osp.oa.FindLDAPUser(username)
 		if err != nil {
 			osp.sendLoginForm(w, r, req, "Error attempting to check login!")
@@ -182,7 +180,6 @@ func (osp *OutbackSessionProvider) GetSession(w http.ResponseWriter, r *http.Req
 		return obSess.SAMLSession(osp.oa)
 	}
 
-	log.Debug("no session, sending raw login form")
 	osp.sendLoginForm(w, r, req, "")
 
 	return nil
