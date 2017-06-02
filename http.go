@@ -2,7 +2,6 @@ package outback
 
 import (
 	"crypto/md5"
-	"encoding/xml"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -15,51 +14,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/parryjacob/saml"
 )
-
-func (oa *OutbackApp) httpMetadata(w http.ResponseWriter, r *http.Request) {
-	buf, _ := xml.MarshalIndent(oa.idp.Metadata(), "", "  ")
-	w.Header().Set("Content-Type", "application/samlmetadata+xml")
-	w.WriteHeader(http.StatusOK)
-	w.Write(buf)
-}
-
-// This is functionally identical to ServeSSO in identity_provider.go in the
-// saml package.
-func (oa *OutbackApp) httpSSO(w http.ResponseWriter, r *http.Request) {
-	oa.idp.ServeSSO(w, r)
-
-	/*authnreq, err := saml.NewIdpAuthnRequest(oa.idp, r)
-	if err != nil {
-		log.WithError(err).Debug("Received malformatted authn request")
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-
-	if err := authnreq.Validate(); err != nil {
-		log.WithError(err).Warn("Failed to validate authn request")
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-
-	session := oa.idp.SessionProvider.GetSession(w, r, authnreq)
-	if session == nil {
-		// This usually means that we're going to prompt the user for
-		// their login and shouldn't continue the SAML request
-		return
-	}
-
-	// make and return the assertion
-	if err := oa.idp.AssertionMaker.MakeAssertion(authnreq, session); err != nil {
-		log.WithError(err).Error("Failed to make assertion")
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if err := authnreq.WriteResponse(w); err != nil {
-		log.WithError(err).Error("Failed to write authn response")
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}*/
-}
 
 func (oa *OutbackApp) httpIDPList(w http.ResponseWriter, r *http.Request) {
 	sess := oa.sessionProvider.GetSession(w, r, nil)
@@ -122,8 +76,8 @@ func (oa *OutbackApp) serveHTTP() error {
 
 	r := mux.NewRouter()
 
-	r.HandleFunc("/metadata", oa.httpMetadata)
-	r.HandleFunc("/sso", oa.httpSSO)
+	r.HandleFunc("/metadata", oa.idp.ServeMetadata)
+	r.HandleFunc("/sso", oa.idp.ServeSSO)
 	r.HandleFunc("/sps", oa.httpIDPList)
 	r.HandleFunc("/idpinit/{hash}", oa.httpIDPInitiated)
 
