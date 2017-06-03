@@ -1,0 +1,56 @@
+# Basic web setup
+# Normally, you should use https and have this listen on a higher
+# port and reverse proxy it behind nginx or Apache
+BaseURL="http://localhost"
+ListenAddress="127.0.0.1"
+Port=80
+
+# These are used for signing SAML assertions, etc
+KeyFile="idp-key.pem"
+CertFile="idp-cert.pem"
+
+# Debug logging
+Debug=false
+
+# Session/cookie configuration
+RedisURI="localhost:6379"
+CookieLifetime="168h"
+
+# LDAP configuration
+LDAPHost="127.0.0.1" # If using LDAPS, this will be used to verify the server's cert
+LDAPPort=389
+LDAPS=false
+LDAPRootCA="ldap-root.pem" # Must be provided if LDAPS is true
+
+# if PasswordChangeAsUser=false, then this should be an
+# administrative user who can modify the password attributes
+LDAPBindDN="admin"
+LDAPBindPW="hunter2"
+LDAPUsernameAttribute="uid"
+LDAPGroupAttribute="memberOf"
+LDAPUserFilter="(objectClass=user)"
+LDAPBaseDN=[
+    "ou=people,dc=example,dc=com",
+]
+
+# Enable AD compatibility mode
+# This also requires that the bind user has been delegated the ability
+# to change user passwords in the BaseDNs above if SelfServe=true
+LDAPActiveDirectory=false
+
+# Enable user self-serve features (password change)
+SelfServe=true
+
+# Password policy
+# If implemented by the server, errors will be shown to the client
+# if their new password does not meet the server's requirements
+# but you should replicate the configuration here to the best
+# of your ability to improve the error messages
+PasswordMinLength=8
+PasswordMustCapital=false
+PasswordMustNumbers=false
+PasswordMustSymbol=false
+
+# if true, we attempt to bind as the user to change their password
+# instead of doing it as the BindDN user
+PasswordChangeAsUser=true
