@@ -9,6 +9,9 @@ Port=80
 KeyFile="idp-key.pem"
 CertFile="idp-cert.pem"
 
+# Location of SAML SP metadata (*.xml)
+MetadataDirectory="metadata"
+
 # Debug logging
 Debug=false
 
