@@ -78,8 +78,31 @@ func (os *OutbackSession) SaveSession(oa *OutbackApp) error {
 	return rd.Set("outback::session::"+os.ID, string(jsbd), oa.Config.CookieLifetime).Err()
 }
 
+// Destroy will attempt to delete the session in Redis and update the user's cookie
+func (os *OutbackSession) Destroy(oa *OutbackApp, w http.ResponseWriter, r *http.Request) error {
+	rd, err := oa.getRedis()
+	if err != nil {
+		return err
+	}
+	if err := rd.Del("outback::session::" + os.ID).Err(); err != nil {
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "outback_session",
+		Value:    "",
+		MaxAge:   -1,
+		HttpOnly: false,
+		Path:     "/",
+	})
+	return nil
+}
+
 // LoadSessionByID will attempt to load a session from JSON
 func LoadSessionByID(id string, oa *OutbackApp) (*OutbackSession, error) {
+	if len(id) == 0 {
+		return nil, nil
+	}
+
 	rd, err := oa.getRedis()
 	if err != nil {
 		return nil, err
@@ -113,8 +136,8 @@ func LoadSessionByID(id string, oa *OutbackApp) (*OutbackSession, error) {
 	return os, nil
 }
 
-// GetSession returns a saml.Session or nil for the passed request
-func (osp *OutbackSessionProvider) GetSession(w http.ResponseWriter, r *http.Request, req *saml.IdpAuthnRequest) *saml.Session {
+// GetOutbackSession will get the outback session for the current user or prompt for a login form
+func (oa *OutbackApp) GetOutbackSession(w http.ResponseWriter, r *http.Request, vars map[string]string) *OutbackSession {
 	r.ParseForm()
 
 	// Check if we're attempting to login
@@ -122,47 +145,47 @@ func (osp *OutbackSessionProvider) GetSession(w http.ResponseWriter, r *http.Req
 		username := r.PostForm.Get("user")
 		password := r.PostForm.Get("password")
 
-		ldapuser, err := osp.oa.FindLDAPUser(username)
+		ldapuser, err := oa.FindLDAPUser(username)
 		if err != nil {
-			osp.sendLoginForm(w, r, req, "Error attempting to check login!")
+			oa.sendLoginForm(w, r, vars, "Error attempting to check login!")
 			log.WithError(err).WithField("username", username).Error("Failed to check for LDAP user")
 			return nil
 		}
 
 		// no user
 		if ldapuser == nil {
-			osp.sendLoginForm(w, r, req, "Wrong username or password!")
+			oa.sendLoginForm(w, r, vars, "Wrong username or password!")
 			return nil
 		}
 
 		// user is good, check the password
-		pwok, err := osp.oa.TestLDAPUserPassword(ldapuser, password)
+		pwok, err := oa.TestLDAPUserPassword(ldapuser, password)
 		if err != nil {
-			osp.sendLoginForm(w, r, req, "Error attempting to check password!")
+			oa.sendLoginForm(w, r, vars, "Error attempting to check password!")
 			log.WithError(err).WithField("username", username).Error("Failed to check LDAP password")
 			return nil
 		}
 
 		// wrong password
 		if !pwok {
-			osp.sendLoginForm(w, r, req, "Wrong username or password!")
+			oa.sendLoginForm(w, r, vars, "Wrong username or password!")
 			return nil
 		}
 
 		// password is confirmed okay
 		obSess := NewSessionFromLDAP(ldapuser)
-		if err := obSess.SaveSession(osp.oa); err != nil {
-			osp.sendLoginForm(w, r, req, "Failed to save session!")
+		if err := obSess.SaveSession(oa); err != nil {
+			oa.sendLoginForm(w, r, vars, "Failed to save session!")
 			log.WithError(err).Error("Failed to write session to redis!")
 			return nil
 		}
 
-		http.SetCookie(w, obSess.Cookie(osp.oa))
-		return obSess.SAMLSession(osp.oa)
+		http.SetCookie(w, obSess.Cookie(oa))
+		return obSess
 	}
 
 	if sessionCookie, err := r.Cookie("outback_session"); err == nil {
-		obSess, err := LoadSessionByID(sessionCookie.Value, osp.oa)
+		obSess, err := LoadSessionByID(sessionCookie.Value, oa)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			log.WithError(err).Error("Failed to load session by ID!")
@@ -171,47 +194,53 @@ func (osp *OutbackSessionProvider) GetSession(w http.ResponseWriter, r *http.Req
 
 		if obSess == nil {
 			// no error but no cookie
-			osp.sendLoginForm(w, r, req, "")
+			oa.sendLoginForm(w, r, vars, "")
 			log.WithField("id", sessionCookie.Value).Debug("found cookie but missing redis session")
 			return nil
 		}
 
 		// the session is good!
-		return obSess.SAMLSession(osp.oa)
+		return obSess
 	}
 
-	osp.sendLoginForm(w, r, req, "")
+	oa.sendLoginForm(w, r, vars, "")
 
 	return nil
 }
 
-func (osp *OutbackSessionProvider) sendLoginForm(w http.ResponseWriter, r *http.Request, req *saml.IdpAuthnRequest, msg string) {
-
-	samlRequest := ""
-	relayState := ""
+// GetSession returns a saml.Session or nil for the passed request
+func (osp *OutbackSessionProvider) GetSession(w http.ResponseWriter, r *http.Request, req *saml.IdpAuthnRequest) *saml.Session {
+	vars := make(map[string]string, 0)
 	if req != nil {
-		samlRequest = base64.StdEncoding.EncodeToString(req.RequestBuffer)
-		relayState = req.RelayState
+		vars["SAMLRequest"] = base64.StdEncoding.EncodeToString(req.RequestBuffer)
+		vars["RelayState"] = req.RelayState
 	}
 
+	session := osp.oa.GetOutbackSession(w, r, vars)
+	if session == nil {
+		return nil
+	}
+
+	return session.SAMLSession(osp.oa)
+}
+
+func (oa *OutbackApp) sendLoginForm(w http.ResponseWriter, r *http.Request, vars map[string]string, msg string) {
 	destURL := r.URL
 	destURL.RawQuery = ""
 	//destURL = osp.oa.Config.BaseURL.ResolveReference(destURL)
 
-	if err := osp.oa.templates.Lookup("login.html").Execute(w, struct {
+	if err := oa.templates.Lookup("login.html").Execute(w, struct {
 		Message     string
 		URL         string
 		SAMLRequest string
-		RelayState  string
+		Vars        map[string]string
 	}{
-		Message:     msg,
-		URL:         destURL.String(),
-		SAMLRequest: samlRequest,
-		RelayState:  relayState,
+		Message: msg,
+		URL:     destURL.String(),
+		Vars:    vars,
 	}); err != nil {
 		panic(err)
 	}
-
 }
 
 func newSessionID() string {

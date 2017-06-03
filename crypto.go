@@ -18,15 +18,23 @@ func parseKeyAndCertificate(keyFile string, certFile string) (crypto.PrivateKey,
 		return nil, nil, err
 	}
 
-	certBytes, err := ioutil.ReadFile(certFile)
-	if err != nil {
-		return nil, nil, err
-	}
-	certBlock, _ := pem.Decode(certBytes)
-	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	cert, err := parsePEMCert(certFile)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return key, cert, nil
+}
+
+func parsePEMCert(certFile string) (*x509.Certificate, error) {
+	certBytes, err := ioutil.ReadFile(certFile)
+	if err != nil {
+		return nil, err
+	}
+	certBlock, _ := pem.Decode(certBytes)
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return cert, nil
 }

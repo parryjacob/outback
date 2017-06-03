@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"crypto/x509"
+
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/ldap.v2"
 )
@@ -29,8 +31,17 @@ func (oa *OutbackApp) getLDAP(bind bool) (conn *ldap.Conn, err error) {
 	if !oa.Config.LDAPConfig.Secure {
 		conn, err = ldap.Dial("tcp", addr)
 	} else {
+		rootPool := x509.NewCertPool()
+		rootPool.AddCert(oa.Config.LDAPConfig.RootCA)
+
+		// We limit our maximum TLS version to TLS 1.1 here
+		// because there seems to be an issue with Active Directory
+		// and using TLS 1.2
 		conn, err = ldap.DialTLS("tcp", addr, &tls.Config{
-			InsecureSkipVerify: true,
+			InsecureSkipVerify: false,
+			RootCAs:            rootPool,
+			ServerName:         oa.Config.LDAPConfig.Host,
+			MaxVersion:         tls.VersionTLS11,
 		})
 	}
 

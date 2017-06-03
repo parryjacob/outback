@@ -3,6 +3,7 @@ package outback
 import (
 	"crypto"
 	"crypto/x509"
+	"errors"
 	"net/url"
 	"time"
 
@@ -33,6 +34,7 @@ type ldapConfig struct {
 	UsernameAttribute string
 	GroupAttribute    string
 	UserFilter        string
+	RootCA            *x509.Certificate
 }
 
 type configFile struct {
@@ -52,6 +54,7 @@ type configFile struct {
 	LDAPUsernameAttribute string
 	LDAPUserFilter        string
 	LDAPGroupAttribute    string
+	LDAPRootCA            string
 	RedisURI              string
 	CookieLifetime        string
 }
@@ -66,7 +69,7 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		Debug:                 false,
 		ListenAddress:         "127.0.0.1",
 		LDAPHost:              "127.0.0.1",
-		LDAPPort:              389,
+		LDAPPort:              0,
 		LDAPS:                 false,
 		LDAPBaseDN:            make([]string, 0),
 		LDAPUsernameAttribute: "sAMAccountName",
@@ -74,6 +77,7 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		CookieLifetime:        "168h",
 		LDAPUserFilter:        "(objectClass=user)",
 		LDAPGroupAttribute:    "memberOf",
+		LDAPRootCA:            "",
 	}
 	if _, err := toml.DecodeFile(configPath, &c); err != nil {
 		return nil
@@ -91,6 +95,15 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		return err
 	}
 
+	// set default LDAP ports
+	if c.LDAPPort == 0 {
+		if c.LDAPS {
+			c.LDAPPort = 636
+		} else {
+			c.LDAPPort = 389
+		}
+	}
+
 	// setup the LDAP config
 	lc := ldapConfig{
 		Host:              c.LDAPHost,
@@ -103,6 +116,19 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		UserFilter:        c.LDAPUserFilter,
 		GroupAttribute:    c.LDAPGroupAttribute,
 	}
+
+	// load the LDAP root CA
+	if c.LDAPS && len(c.LDAPRootCA) == 0 {
+		return errors.New("using LDAP over SSL needs a root CA specified")
+	}
+	if len(c.LDAPRootCA) > 0 {
+		ldapRootCert, err := parsePEMCert(c.LDAPRootCA)
+		if err != nil {
+			return err
+		}
+		lc.RootCA = ldapRootCert
+	}
+
 	config.LDAPConfig = &lc
 
 	// cookies

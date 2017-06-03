@@ -50,7 +50,7 @@ func New(configPath string) (*OutbackApp, error) {
 		Key:                     oa.Config.PrivateKey,
 		Certificate:             oa.Config.Certificate,
 		ServiceProviderProvider: oa.serviceProviderProvider,
-		AssertionMaker:          saml.DefaultAssertionMaker{},
+		AssertionMaker:          OutbackAssertionMaker{},
 		MetadataURL:             *oa.Config.BaseURL.ResolveReference(mdurl),
 		SSOURL:                  *oa.Config.BaseURL.ResolveReference(ssourl),
 		Logger:                  log.New(),

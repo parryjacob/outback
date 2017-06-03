@@ -8,8 +8,9 @@
             {{ if .Message }}<p>{{.Message}}</p>{{ end }}
             <input type="text" name="user" placeholder="Username" value="" /><br>
             <input type="password" name="password" placeholder="Password" value="" /><br>
-            <input type="hidden" name="SAMLRequest" value="{{.SAMLRequest}}" />
-            <input type="hidden" name="RelayState" value="{{.RelayState}}" />
+            {{ range $key, $value := .Vars }}
+            <input type="hidden" name="{{ $key }}" value="{{ $value }}" />
+            {{ end }}
             <input type="submit" value="Login" />
         </form>
     </body>
