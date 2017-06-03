@@ -22,6 +22,7 @@ type Config struct {
 	LDAPConfig        *ldapConfig
 	RedisURI          string
 	CookieLifetime    time.Duration
+	SelfServe         bool
 }
 
 type ldapConfig struct {
@@ -35,6 +36,17 @@ type ldapConfig struct {
 	GroupAttribute    string
 	UserFilter        string
 	RootCA            *x509.Certificate
+	ActiveDirectory   bool
+
+	PasswordPolicy *passwordPolicyConfig
+}
+
+type passwordPolicyConfig struct {
+	MinLength  int
+	Symbols    bool
+	Numbers    bool
+	Capitals   bool
+	UserChange bool // if true, we bind and change the pwd as the user
 }
 
 type configFile struct {
@@ -55,8 +67,16 @@ type configFile struct {
 	LDAPUserFilter        string
 	LDAPGroupAttribute    string
 	LDAPRootCA            string
+	LDAPActiveDirectory   bool
 	RedisURI              string
 	CookieLifetime        string
+	SelfServe             bool
+
+	PasswordMinLength    int
+	PasswordMustNumbers  bool
+	PasswordMustCapital  bool
+	PasswordMustSymbol   bool
+	PasswordChangeAsUser bool
 }
 
 func (oa *OutbackApp) loadConfig(configPath string) (err error) {
@@ -78,6 +98,14 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		LDAPUserFilter:        "(objectClass=user)",
 		LDAPGroupAttribute:    "memberOf",
 		LDAPRootCA:            "",
+		LDAPActiveDirectory:   false,
+		SelfServe:             false,
+
+		PasswordMinLength:    8,
+		PasswordMustCapital:  false,
+		PasswordMustNumbers:  false,
+		PasswordMustSymbol:   false,
+		PasswordChangeAsUser: false,
 	}
 	if _, err := toml.DecodeFile(configPath, &c); err != nil {
 		return nil
@@ -115,6 +143,14 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		UsernameAttribute: c.LDAPUsernameAttribute,
 		UserFilter:        c.LDAPUserFilter,
 		GroupAttribute:    c.LDAPGroupAttribute,
+		ActiveDirectory:   c.LDAPActiveDirectory,
+		PasswordPolicy: &passwordPolicyConfig{
+			MinLength:  c.PasswordMinLength,
+			Capitals:   c.PasswordMustCapital,
+			Symbols:    c.PasswordMustSymbol,
+			Numbers:    c.PasswordMustNumbers,
+			UserChange: c.PasswordChangeAsUser,
+		},
 	}
 
 	// load the LDAP root CA
@@ -129,6 +165,7 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		lc.RootCA = ldapRootCert
 	}
 
+	// set the LDAP config
 	config.LDAPConfig = &lc
 
 	// cookies
@@ -142,6 +179,7 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 	config.Debug = c.Debug
 	config.ListenAddress = c.ListenAddress
 	config.RedisURI = c.RedisURI
+	config.SelfServe = c.SelfServe
 
 	oa.Config = &config
 

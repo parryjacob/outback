@@ -69,5 +69,10 @@ func (oa *OutbackApp) Run() error {
 	}
 	log.Debugf("LDAP connected to %s:%d", oa.Config.LDAPConfig.Host, oa.Config.LDAPConfig.Port)
 
+	if oa.Config.LDAPConfig.ActiveDirectory {
+		log.Info("Outback is operating in Active Directory compatibility mode")
+		log.Info("You must use an administrative user to bind to LDAP if you wish to use self-serve features")
+	}
+
 	return oa.serveHTTP()
 }

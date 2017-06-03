@@ -2,8 +2,12 @@ package outback
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+
+	"golang.org/x/text/encoding/unicode"
 
 	"crypto/x509"
 
@@ -23,6 +27,8 @@ type LDAPUser struct {
 
 func (oa *OutbackApp) getLDAP(bind bool) (conn *ldap.Conn, err error) {
 	if bind && oa.ldap != nil {
+		// TODO: we should test this connection
+
 		return oa.ldap, nil
 	}
 
@@ -34,15 +40,23 @@ func (oa *OutbackApp) getLDAP(bind bool) (conn *ldap.Conn, err error) {
 		rootPool := x509.NewCertPool()
 		rootPool.AddCert(oa.Config.LDAPConfig.RootCA)
 
-		// We limit our maximum TLS version to TLS 1.1 here
-		// because there seems to be an issue with Active Directory
-		// and using TLS 1.2
-		conn, err = ldap.DialTLS("tcp", addr, &tls.Config{
+		tlsc := &tls.Config{
 			InsecureSkipVerify: false,
 			RootCAs:            rootPool,
 			ServerName:         oa.Config.LDAPConfig.Host,
-			MaxVersion:         tls.VersionTLS11,
-		})
+		}
+
+		// We limit our maximum TLS version to TLS 1.1 here
+		// because there seems to be an issue with Active Directory
+		// and using TLS 1.2 with 512-bit ciphers.
+		// Go currently only has 256-bit TLS 1.2 ciphers, and if you
+		// attempt to connect to AD it will just reset the connection
+		// instead of negotiating with a 256-bit cipher.
+		if oa.Config.LDAPConfig.ActiveDirectory {
+			tlsc.MaxVersion = tls.VersionTLS11
+		}
+
+		conn, err = ldap.DialTLS("tcp", addr, tlsc)
 	}
 
 	if err != nil {
@@ -63,9 +77,22 @@ func (oa *OutbackApp) getLDAP(bind bool) (conn *ldap.Conn, err error) {
 	return conn, err
 }
 
-func (oa *OutbackApp) ldapSRToUser(conn *ldap.Conn, sr *ldap.SearchRequest) (*LDAPUser, error) {
+func (oa *OutbackApp) ldapSRToUser(sr *ldap.SearchRequest) (*LDAPUser, error) {
+	conn, err := oa.getLDAP(true)
+	if err != nil {
+		return nil, err
+	}
+
 	s, err := conn.Search(sr)
 	if err != nil {
+
+		// If we were disconnected, try again
+		if ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
+			oa.ldap = nil
+			return oa.ldapSRToUser(sr)
+		}
+
+		oa.ldap = nil
 		return nil, err
 	}
 
@@ -122,11 +149,6 @@ func (oa *OutbackApp) ldapFilter(addFilter string) string {
 
 // FindLDAPUser will search for an LDAP user with the particular name
 func (oa *OutbackApp) FindLDAPUser(name string) (*LDAPUser, error) {
-	conn, err := oa.getLDAP(true)
-	if err != nil {
-		return nil, err
-	}
-
 	for _, dn := range oa.Config.LDAPConfig.BaseDN {
 		filter := "(" + oa.Config.LDAPConfig.UsernameAttribute + "=" + name + ")"
 
@@ -141,7 +163,7 @@ func (oa *OutbackApp) FindLDAPUser(name string) (*LDAPUser, error) {
 			nil,                   // controls
 		)
 
-		user, err := oa.ldapSRToUser(conn, sr)
+		user, err := oa.ldapSRToUser(sr)
 
 		if err != nil {
 			return nil, err
@@ -156,10 +178,6 @@ func (oa *OutbackApp) FindLDAPUser(name string) (*LDAPUser, error) {
 
 // FindLDAPUserByDN will attempt to find a user directly by their DN
 func (oa *OutbackApp) FindLDAPUserByDN(dn string) (*LDAPUser, error) {
-	conn, err := oa.getLDAP(true)
-	if err != nil {
-		return nil, err
-	}
 	sr := ldap.NewSearchRequest(
 		dn,
 		ldap.ScopeBaseObject,
@@ -170,7 +188,7 @@ func (oa *OutbackApp) FindLDAPUserByDN(dn string) (*LDAPUser, error) {
 		oa.ldapAttributes(),
 		nil,
 	)
-	return oa.ldapSRToUser(conn, sr)
+	return oa.ldapSRToUser(sr)
 }
 
 // TestLDAPUserPassword will attempt to bind as a user
@@ -191,4 +209,99 @@ func (oa *OutbackApp) TestLDAPUserPassword(user *LDAPUser, password string) (boo
 	}
 
 	return true, nil
+}
+
+// ChangeLDAPPassword will attempt to change a user's password
+func (oa *OutbackApp) ChangeLDAPPassword(user *LDAPUser, oldpwd string, password string) error {
+	// Active Directory does not support the password modify extended request
+	// so we must do it by modifying the unicodePwd attribute.
+	// This must be done by setting it to "password" (with the quotes)
+	// and encoding that with UTF-16 in Little Endian mode.
+
+	// Yeah, seriously.
+	if oa.Config.LDAPConfig.ActiveDirectory {
+		enc := unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewEncoder()
+		encoded, err := enc.String("\"" + password + "\"")
+		if err != nil {
+			return err
+		}
+
+		mod := ldap.NewModifyRequest(user.DN)
+		mod.Replace("unicodePwd", []string{encoded})
+
+		conn, err := oa.getLDAP(true)
+		if err != nil {
+			return err
+		}
+
+		err = conn.Modify(mod)
+		if err != nil {
+			if ldap.IsErrorWithCode(err, ldap.ErrorNetwork) {
+				oa.ldap = nil
+				return oa.ChangeLDAPPassword(user, oldpwd, password)
+			}
+			return err
+		}
+
+		return nil
+	}
+
+	var conn *ldap.Conn
+	var err error
+	var pwchange *ldap.PasswordModifyRequest
+
+	if oa.Config.LDAPConfig.PasswordPolicy.UserChange {
+		// bind and change as the user
+		conn, err = oa.getLDAP(false)
+		if err != nil {
+			return err
+		}
+		err = conn.Bind(user.DN, oldpwd)
+		if err != nil {
+			return err
+		}
+		pwchange = ldap.NewPasswordModifyRequest("", oldpwd, password)
+	} else {
+		// change as the admin user
+		conn, err = oa.getLDAP(true)
+		if err != nil {
+			return err
+		}
+		pwchange = ldap.NewPasswordModifyRequest(user.DN, "", password)
+	}
+
+	_, err = conn.PasswordModify(pwchange)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// MatchesPolicy confirms if a password meets the password policy
+func (pp *passwordPolicyConfig) MatchesPolicy(pwd string) error {
+	if len(pwd) < pp.MinLength {
+		return errors.New("must be at least " + strconv.Itoa(pp.MinLength) + " characters")
+	}
+	if pp.Capitals && strings.ToLower(pwd) == pwd {
+		return errors.New("must contain at least one (1) uppercase character")
+	}
+	if pp.Numbers && !strings.ContainsAny(pwd, "0123456789") {
+		return errors.New("must contain at least one (1) number")
+	}
+	if pp.Symbols && !strings.ContainsAny(pwd, "`~!@#$%^&*()-_=+[{]}\\|;:'\"/?.>,<") {
+		return errors.New("must contain at least one (1) symbol")
+	}
+	return nil
+}
+
+func (oa *OutbackApp) niceLDAPError(err error) string {
+	ldapErr, ok := err.(*ldap.Error)
+	if !ok {
+		return err.Error()
+	}
+	result, ok := ldap.LDAPResultCodeMap[ldapErr.ResultCode]
+	if !ok {
+		return "unknown LDAP error: " + strconv.Itoa(int(ldapErr.ResultCode))
+	}
+	return result
 }

@@ -68,8 +68,13 @@ func (oa *OutbackApp) httpIndex(w http.ResponseWriter, r *http.Request) {
 	if session == nil {
 		return
 	}
-
-	w.Write([]byte("hello index"))
+	if err := oa.templates.Lookup("home.html").Execute(w, struct {
+		User *LDAPUser
+	}{
+		User: session.ldapUser,
+	}); err != nil {
+		panic(err)
+	}
 }
 
 func (oa *OutbackApp) httpLogout(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +117,11 @@ func (oa *OutbackApp) serveHTTP() error {
 	// IdP Initiated flow
 	r.HandleFunc("/sps", oa.httpIDPList)
 	r.HandleFunc("/idpinit/{hash}", oa.httpIDPInitiated)
+
+	// LDAP Self Serve
+	if oa.Config.SelfServe {
+		r.HandleFunc("/changepw", oa.httpSSChangePassword)
+	}
 
 	addr := oa.Config.ListenAddress + ":" + strconv.Itoa(oa.Config.Port)
 
