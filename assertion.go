@@ -192,6 +192,27 @@ func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, sessi
 		})
 	}
 
+	// Find the desired NameID and format
+	nameIDFormat := "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified"
+	if len(req.SPSSODescriptor.NameIDFormats) > 0 {
+		nameIDFormat = string(req.SPSSODescriptor.NameIDFormats[0])
+	}
+	nameID := session.NameID
+	if nameIDFormat == "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress" && len(session.UserEmail) > 0 {
+		nameID = session.UserEmail
+	}
+
+	audienceRestrictions := []saml.AudienceRestriction{
+		saml.AudienceRestriction{
+			Audience: saml.Audience{Value: req.ServiceProviderMetadata.EntityID},
+		},
+	}
+	if req.ServiceProviderMetadata.EntityID != req.ACSEndpoint.Location {
+		audienceRestrictions = append(audienceRestrictions, saml.AudienceRestriction{
+			Audience: saml.Audience{Value: req.ACSEndpoint.Location},
+		})
+	}
+
 	req.Assertion = &saml.Assertion{
 		ID:           newSessionID(),
 		IssueInstant: saml.TimeNow(),
@@ -202,10 +223,10 @@ func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, sessi
 		},
 		Subject: &saml.Subject{
 			NameID: &saml.NameID{
-				Format:          "urn:oasis:names:tc:SAML:2.0:nameid-format:transient",
+				Format:          nameIDFormat,
 				NameQualifier:   req.IDP.Metadata().EntityID,
 				SPNameQualifier: req.ServiceProviderMetadata.EntityID,
-				Value:           session.NameID,
+				Value:           nameID,
 			},
 			SubjectConfirmations: []saml.SubjectConfirmation{
 				saml.SubjectConfirmation{
@@ -220,13 +241,9 @@ func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, sessi
 			},
 		},
 		Conditions: &saml.Conditions{
-			NotBefore:    saml.TimeNow(),
-			NotOnOrAfter: saml.TimeNow().Add(saml.MaxIssueDelay),
-			AudienceRestrictions: []saml.AudienceRestriction{
-				saml.AudienceRestriction{
-					Audience: saml.Audience{Value: req.ServiceProviderMetadata.EntityID},
-				},
-			},
+			NotBefore:            saml.TimeNow(),
+			NotOnOrAfter:         saml.TimeNow().Add(saml.MaxIssueDelay),
+			AudienceRestrictions: audienceRestrictions,
 		},
 		AuthnStatements: []saml.AuthnStatement{
 			saml.AuthnStatement{
