@@ -39,7 +39,9 @@ func New(configPath string) (*OutbackApp, error) {
 		return nil, err
 	}
 
-	oa.serviceProviderProvider = &OutbackServiceProviderProvider{}
+	oa.serviceProviderProvider = &OutbackServiceProviderProvider{
+		oa: oa,
+	}
 	if err := oa.serviceProviderProvider.loadServiceProviders(oa.Config.MetadataDirectory); err != nil {
 		return nil, err
 	}

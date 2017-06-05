@@ -1,14 +1,11 @@
 package outback
 
 import (
-	"crypto/md5"
 	"html/template"
 	"net/http"
 	"strconv"
 
 	"time"
-
-	"encoding/hex"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
@@ -21,20 +18,19 @@ func (oa *OutbackApp) httpIDPList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idpHashes := make(map[string]string, 0)
+	sps := map[string]*OutbackSAMLProviderConfig{}
 	for entityID, sp := range oa.serviceProviderProvider.providers {
-		h := md5.New()
-		h.Write([]byte(entityID))
+		samlConfig := oa.Config.GetSAMLProviderConfig(entityID)
 
-		if metadataHasACSEndpoint(sp) {
-			idpHashes[entityID] = hex.EncodeToString(h.Sum(nil))
+		if metadataHasACSEndpoint(sp) && samlConfig.IDPInitiated {
+			sps[entityID] = samlConfig
 		}
 	}
 
 	if err := oa.templates.Lookup("sp_list.html").Execute(w, struct {
-		SPs map[string]string
+		SPs map[string]*OutbackSAMLProviderConfig
 	}{
-		SPs: idpHashes,
+		SPs: sps,
 	}); err != nil {
 		panic(err)
 	}
@@ -45,11 +41,9 @@ func (oa *OutbackApp) httpIDPInitiated(w http.ResponseWriter, r *http.Request) {
 	hash := vars["hash"]
 	var metadata *saml.EntityDescriptor
 	for entityID, sp := range oa.serviceProviderProvider.providers {
-		h := md5.New()
-		h.Write([]byte(entityID))
-		sphash := hex.EncodeToString(h.Sum(nil))
+		samlConfig := oa.Config.GetSAMLProviderConfig(entityID)
 
-		if sphash == hash {
+		if hash == samlConfig.GetHash() && samlConfig.IDPInitiated {
 			metadata = sp
 			break
 		}

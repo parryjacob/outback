@@ -1,6 +1,7 @@
 package outback
 
 import (
+	"crypto/md5"
 	"net/http"
 
 	"io/ioutil"
@@ -9,11 +10,35 @@ import (
 
 	"os"
 
+	"encoding/hex"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/parryjacob/saml"
 )
 
+type OutbackSAMLProviderConfig struct {
+	EntityID     string
+	IDPInitiated bool
+	DisplayName  string
+}
+
+// GetHash will return the MD5 hash of the entityID
+func (ospc *OutbackSAMLProviderConfig) GetHash() string {
+	h := md5.New()
+	h.Write([]byte(ospc.EntityID))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// GetName will get the best option for a display name for this provider
+func (ospc *OutbackSAMLProviderConfig) GetName() string {
+	if len(ospc.DisplayName) > 0 {
+		return ospc.DisplayName
+	}
+	return ospc.EntityID
+}
+
 type OutbackServiceProviderProvider struct {
+	oa        *OutbackApp
 	providers map[string]*saml.EntityDescriptor
 }
 

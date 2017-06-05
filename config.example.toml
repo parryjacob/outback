@@ -77,3 +77,11 @@ ProviderName="saml-idp"     # name of the identity provider configured in AWS
     [[plugins.plugin_aws.role]]
     Group="admin"         # LDAP group
     Role="saml-admin"     # AWS role name
+
+# You can choose to define specific configuration for each
+# service provider so that you can disable IDP Initiated
+# SSO or set a nicer display name
+[[metadata]]
+EntityID="https://someprovider.com/sso/saml"
+IDPInitiated=true
+DisplayName="Provider Name"

@@ -30,6 +30,8 @@ type Config struct {
 	RedisURI          string
 	CookieLifetime    time.Duration
 	SelfServe         bool
+
+	SAMLProviderConfigs []OutbackSAMLProviderConfig
 }
 
 type ldapConfig struct {
@@ -88,7 +90,8 @@ type configFile struct {
 	PasswordMustSymbol   bool
 	PasswordChangeAsUser bool
 
-	Plugins map[string]toml.Primitive
+	Plugins             map[string]toml.Primitive
+	SAMLProviderConfigs []OutbackSAMLProviderConfig `toml:"metadata"`
 }
 
 func (oa *OutbackApp) loadConfig(configPath string) (err error) {
@@ -121,7 +124,8 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		PasswordMustSymbol:   false,
 		PasswordChangeAsUser: false,
 
-		Plugins: map[string]toml.Primitive{},
+		Plugins:             map[string]toml.Primitive{},
+		SAMLProviderConfigs: []OutbackSAMLProviderConfig{},
 	}
 
 	tomlMeta, err := toml.DecodeFile(configPath, &c)
@@ -202,6 +206,7 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 	config.PluginDirectory = c.PluginDirectory
 	config.tomlMetadata = &tomlMeta
 	config.pluginConfig = c.Plugins
+	config.SAMLProviderConfigs = c.SAMLProviderConfigs
 
 	oa.Config = &config
 
@@ -221,4 +226,19 @@ func (oc *Config) DecodePluginConfig(plugin string, i interface{}) error {
 	}
 
 	return oc.tomlMetadata.PrimitiveDecode(prim, i)
+}
+
+// GetSAMLProviderConfig will return any custom configuration for the SAML
+// provider or a default set of options
+func (oc *Config) GetSAMLProviderConfig(entityID string) *OutbackSAMLProviderConfig {
+	for _, conf := range oc.SAMLProviderConfigs {
+		if conf.EntityID == entityID {
+			return &conf
+		}
+	}
+	return &OutbackSAMLProviderConfig{
+		EntityID:     entityID,
+		IDPInitiated: true,
+		DisplayName:  entityID,
+	}
 }
