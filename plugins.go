@@ -14,6 +14,7 @@ import (
 type pluginManager struct {
 	Plugins          map[string]*plugin.Plugin
 	AttributePlugins map[string]func(*LDAPUser, *saml.EntityDescriptor) ([]saml.Attribute, error)
+	AssertionPlugins map[string]func(*LDAPUser, *saml.EntityDescriptor, *saml.Assertion) error
 }
 
 func (oa *OutbackApp) loadPlugins(configDir string) error {
@@ -22,6 +23,7 @@ func (oa *OutbackApp) loadPlugins(configDir string) error {
 	plugMan := &pluginManager{
 		Plugins:          map[string]*plugin.Plugin{},
 		AttributePlugins: map[string]func(*LDAPUser, *saml.EntityDescriptor) ([]saml.Attribute, error){},
+		AssertionPlugins: map[string]func(*LDAPUser, *saml.EntityDescriptor, *saml.Assertion) error{},
 	}
 
 	files, err := ioutil.ReadDir(configDir)
@@ -79,7 +81,16 @@ func (pm *pluginManager) findPluginMethods() error {
 			}
 		}
 
-		// TODO: add any other plugin methods here
+		// does it mutate assertions
+		if asfnc, err := pg.Lookup("AlterAssertion"); err == nil {
+			fnc, ok := asfnc.(func(*LDAPUser, *saml.EntityDescriptor, *saml.Assertion) error)
+			if !ok {
+				log.Errorf("Invalid function descriptor for AlterAssertion in %s", pgName)
+			} else {
+				pm.AssertionPlugins[pgName] = fnc
+				log.Debugf("Registering AlterAssertion handler for %s", pgName)
+			}
+		}
 	}
 
 	return nil

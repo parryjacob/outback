@@ -18,18 +18,19 @@ type OutbackAssertionMaker struct {
 func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, session *saml.Session) error {
 	attributes := []saml.Attribute{}
 
-	// load attributes from plugins
 	oaSession, err := LoadSessionByID(session.ID, oam.oa)
 	if err != nil {
-		log.WithError(err).Error("Failed to get OutbackSession from saml.Session, not calling plugins!")
-	} else {
-		for pluginName, pluginFunc := range oam.oa.pluginManager.AttributePlugins {
-			attrs, err := pluginFunc(oaSession.ldapUser, req.ServiceProviderMetadata)
-			if err != nil {
-				log.WithError(err).Errorf("Failed to call AlterAttributes on plugin %s", pluginName)
-			} else {
-				attributes = append(attributes, attrs...)
-			}
+		log.WithError(err).Error("Failed to get OutbackSession from saml.Session!")
+		return err
+	}
+
+	// load attributes from plugins
+	for pluginName, pluginFunc := range oam.oa.pluginManager.AttributePlugins {
+		attrs, err := pluginFunc(oaSession.ldapUser, req.ServiceProviderMetadata)
+		if err != nil {
+			log.WithError(err).Errorf("Failed to call AlterAttributes on plugin %s", pluginName)
+		} else {
+			attributes = append(attributes, attrs...)
 		}
 	}
 
@@ -241,13 +242,13 @@ func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, sessi
 			},
 		},
 		Conditions: &saml.Conditions{
-			NotBefore:            saml.TimeNow(),
+			NotBefore:            saml.TimeNow().Add(saml.MaxIssueDelay * -1 / 2),
 			NotOnOrAfter:         saml.TimeNow().Add(saml.MaxIssueDelay),
 			AudienceRestrictions: audienceRestrictions,
 		},
 		AuthnStatements: []saml.AuthnStatement{
 			saml.AuthnStatement{
-				AuthnInstant: session.CreateTime,
+				AuthnInstant: session.CreateTime.UTC(),
 				SessionIndex: session.Index,
 				SubjectLocality: &saml.SubjectLocality{
 					Address: req.HTTPRequest.RemoteAddr,
@@ -264,6 +265,12 @@ func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, sessi
 				Attributes: attributes,
 			},
 		},
+	}
+
+	for pgName, fnc := range oam.oa.pluginManager.AssertionPlugins {
+		if err := fnc(oaSession.ldapUser, req.ServiceProviderMetadata, req.Assertion); err != nil {
+			log.WithError(err).Errorf("Failed to call AlterAssertion on plugin %s", pgName)
+		}
 	}
 
 	return nil

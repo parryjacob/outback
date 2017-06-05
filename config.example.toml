@@ -78,6 +78,10 @@ ProviderName="saml-idp"     # name of the identity provider configured in AWS
     Group="admin"         # LDAP group
     Role="saml-admin"     # AWS role name
 
+# G Suite plugin requires the Domain option
+[plugins.plugin_gsuite]
+Domain="example.com"
+
 # You can choose to define specific configuration for each
 # service provider so that you can disable IDP Initiated
 # SSO or set a nicer display name
