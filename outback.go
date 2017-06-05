@@ -1,12 +1,12 @@
 package outback
 
 import (
-	"html/template"
 	"net/url"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/go-redis/redis"
 	"github.com/parryjacob/saml"
+	"github.com/unrolled/render"
 	"gopkg.in/ldap.v2"
 )
 
@@ -18,9 +18,9 @@ type OutbackApp struct {
 	idp                     *saml.IdentityProvider
 	ldap                    *ldap.Conn
 	redis                   *redis.Client
-	templates               *template.Template
 	pluginManager           *pluginManager
 	assertionMaker          *OutbackAssertionMaker
+	render                  *render.Render
 }
 
 // New creates and returns a new OutbackApp given a configuration path

@@ -1,7 +1,6 @@
 package outback
 
 import (
-	"html/template"
 	"net/http"
 	"strconv"
 
@@ -10,6 +9,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/parryjacob/saml"
+	"github.com/unrolled/render"
 )
 
 func (oa *OutbackApp) httpIDPList(w http.ResponseWriter, r *http.Request) {
@@ -27,7 +27,7 @@ func (oa *OutbackApp) httpIDPList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := oa.templates.Lookup("sp_list.html").Execute(w, struct {
+	if err := oa.RenderTemplate("sp_list", w, struct {
 		SPs map[string]*OutbackSAMLProviderConfig
 	}{
 		SPs: sps,
@@ -62,7 +62,7 @@ func (oa *OutbackApp) httpIndex(w http.ResponseWriter, r *http.Request) {
 	if session == nil {
 		return
 	}
-	if err := oa.templates.Lookup("home.html").Execute(w, struct {
+	if err := oa.RenderTemplate("home", w, struct {
 		User *LDAPUser
 	}{
 		User: session.ldapUser,
@@ -83,21 +83,16 @@ func (oa *OutbackApp) httpLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := oa.templates.Lookup("logged_out.html").Execute(w, nil); err != nil {
+	if err := oa.RenderTemplate("logged_out", w, nil); err != nil {
 		panic(err)
 	}
 }
 
-func (oa *OutbackApp) parseTemplates() error {
-	oa.templates = template.New("")
-	_, err := oa.templates.ParseGlob("templates/*.html")
-	return err
-}
-
 func (oa *OutbackApp) serveHTTP() error {
-	if err := oa.parseTemplates(); err != nil {
-		return err
-	}
+	oa.render = render.New(render.Options{
+		IsDevelopment: oa.Config.Debug,
+		Layout:        "layouts/base",
+	})
 
 	r := mux.NewRouter()
 

@@ -60,7 +60,7 @@ func (oa *OutbackApp) httpSSChangePassword(w http.ResponseWriter, r *http.Reques
 }
 
 func (oa *OutbackApp) sendChangePasswordForm(w http.ResponseWriter, r *http.Request, msg string) {
-	if err := oa.templates.Lookup("change_password.html").Execute(w, struct {
+	if err := oa.RenderTemplate("change_password.html", w, struct {
 		Message string
 		URL     string
 	}{

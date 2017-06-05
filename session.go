@@ -229,7 +229,7 @@ func (oa *OutbackApp) sendLoginForm(w http.ResponseWriter, r *http.Request, vars
 	destURL.RawQuery = ""
 	//destURL = osp.oa.Config.BaseURL.ResolveReference(destURL)
 
-	if err := oa.templates.Lookup("login.html").Execute(w, struct {
+	if err := oa.RenderTemplate("login", w, struct {
 		Message     string
 		URL         string
 		SAMLRequest string

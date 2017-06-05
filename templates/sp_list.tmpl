@@ -1,0 +1,7 @@
+{{ define "title-sp_list" }}Services{{ end }}
+
+{{ range $key, $config := .SPs }}
+{{ $config.GetName }}
+<a href="/idpinit/{{ $config.GetHash }}">Start Login</a>
+<hr>
+{{ end }}
