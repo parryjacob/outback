@@ -3,18 +3,35 @@ package outback
 import (
 	"regexp"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/parryjacob/saml"
 )
 
 // OutbackAssertionMaker produces a SAML assertion for the
 // given request and assigns it to req.Assertion.
 type OutbackAssertionMaker struct {
+	oa *OutbackApp
 }
 
 // MakeAssertion implements AssertionMaker. It produces a SAML assertion from the
 // given request and assigns it to req.Assertion.
-func (OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, session *saml.Session) error {
+func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, session *saml.Session) error {
 	attributes := []saml.Attribute{}
+
+	// load attributes from plugins
+	oaSession, err := LoadSessionByID(session.ID, oam.oa)
+	if err != nil {
+		log.WithError(err).Error("Failed to get OutbackSession from saml.Session, not calling plugins!")
+	} else {
+		for pluginName, pluginFunc := range oam.oa.pluginManager.AttributePlugins {
+			attrs, err := pluginFunc(oaSession.ldapUser, req.ServiceProviderMetadata)
+			if err != nil {
+				log.WithError(err).Errorf("Failed to call AlterAttributes on plugin %s", pluginName)
+			} else {
+				attributes = append(attributes, attrs...)
+			}
+		}
+	}
 
 	var attributeConsumingService *saml.AttributeConsumingService
 	for _, acs := range req.SPSSODescriptor.AttributeConsumingServices {

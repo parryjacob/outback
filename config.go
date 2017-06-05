@@ -7,16 +7,23 @@ import (
 	"net/url"
 	"time"
 
+	"strings"
+
 	"github.com/BurntSushi/toml"
+	log "github.com/Sirupsen/logrus"
 )
 
 // Config represents the config of an Outback instance
 type Config struct {
+	tomlMetadata *toml.MetaData
+	pluginConfig map[string]toml.Primitive
+
 	BaseURL           *url.URL
 	PrivateKey        crypto.PrivateKey
 	Certificate       *x509.Certificate
 	Port              int
 	MetadataDirectory string
+	PluginDirectory   string
 	Debug             bool
 	ListenAddress     string
 	LDAPConfig        *ldapConfig
@@ -32,6 +39,7 @@ type ldapConfig struct {
 	BindDN            string
 	BindPW            string
 	BaseDN            []string
+	GroupDN           []string
 	UsernameAttribute string
 	GroupAttribute    string
 	UserFilter        string
@@ -55,6 +63,7 @@ type configFile struct {
 	CertFile              string
 	Port                  int
 	MetadataDirectory     string
+	PluginDirectory       string
 	Debug                 bool
 	ListenAddress         string
 	LDAPHost              string
@@ -63,6 +72,7 @@ type configFile struct {
 	LDAPBindDN            string
 	LDAPBindPW            string
 	LDAPBaseDN            []string
+	LDAPGroupDN           []string
 	LDAPUsernameAttribute string
 	LDAPUserFilter        string
 	LDAPGroupAttribute    string
@@ -77,6 +87,8 @@ type configFile struct {
 	PasswordMustCapital  bool
 	PasswordMustSymbol   bool
 	PasswordChangeAsUser bool
+
+	Plugins map[string]toml.Primitive
 }
 
 func (oa *OutbackApp) loadConfig(configPath string) (err error) {
@@ -86,12 +98,14 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		CertFile:              "idp-cert.pem",
 		Port:                  80,
 		MetadataDirectory:     "metadata",
+		PluginDirectory:       "plugins",
 		Debug:                 false,
 		ListenAddress:         "127.0.0.1",
 		LDAPHost:              "127.0.0.1",
 		LDAPPort:              0,
 		LDAPS:                 false,
-		LDAPBaseDN:            make([]string, 0),
+		LDAPBaseDN:            []string{},
+		LDAPGroupDN:           []string{},
 		LDAPUsernameAttribute: "sAMAccountName",
 		RedisURI:              "localhost:6379",
 		CookieLifetime:        "168h",
@@ -106,9 +120,13 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		PasswordMustNumbers:  false,
 		PasswordMustSymbol:   false,
 		PasswordChangeAsUser: false,
+
+		Plugins: map[string]toml.Primitive{},
 	}
-	if _, err := toml.DecodeFile(configPath, &c); err != nil {
-		return nil
+
+	tomlMeta, err := toml.DecodeFile(configPath, &c)
+	if err != nil {
+		return err
 	}
 
 	config := Config{}
@@ -140,6 +158,7 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		BindDN:            c.LDAPBindDN,
 		BindPW:            c.LDAPBindPW,
 		BaseDN:            c.LDAPBaseDN,
+		GroupDN:           c.LDAPGroupDN,
 		UsernameAttribute: c.LDAPUsernameAttribute,
 		UserFilter:        c.LDAPUserFilter,
 		GroupAttribute:    c.LDAPGroupAttribute,
@@ -180,8 +199,26 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 	config.ListenAddress = c.ListenAddress
 	config.RedisURI = c.RedisURI
 	config.SelfServe = c.SelfServe
+	config.PluginDirectory = c.PluginDirectory
+	config.tomlMetadata = &tomlMeta
+	config.pluginConfig = c.Plugins
 
 	oa.Config = &config
 
 	return nil
+}
+
+// DecodePluginConfig will attempt to decode the plugin configuration
+func (oc *Config) DecodePluginConfig(plugin string, i interface{}) error {
+	if strings.HasSuffix(plugin, ".so") {
+		plugin = plugin[:len(plugin)-3]
+	}
+
+	prim, ok := oc.pluginConfig[plugin]
+	if !ok {
+		log.Debugf("Requested config for plugin '%s', but no Primitive found", plugin)
+		return nil
+	}
+
+	return oc.tomlMetadata.PrimitiveDecode(prim, i)
 }

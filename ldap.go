@@ -23,6 +23,17 @@ type LDAPUser struct {
 	GivenName string
 	Username  string
 	Email     string
+	Groups    []string
+}
+
+// HasGroup returns whether this user has the specified group (case insensitive)
+func (u *LDAPUser) HasGroup(g string) bool {
+	for _, group := range u.Groups {
+		if strings.EqualFold(group, g) {
+			return true
+		}
+	}
+	return false
 }
 
 func (oa *OutbackApp) getLDAP(bind bool) (conn *ldap.Conn, err error) {
@@ -104,7 +115,31 @@ func (oa *OutbackApp) ldapSRToUser(sr *ldap.SearchRequest) (*LDAPUser, error) {
 			GivenName: e.GetAttributeValue("givenName"),
 			Username:  e.GetAttributeValue(oa.Config.LDAPConfig.UsernameAttribute),
 			Email:     e.GetAttributeValue("mail"),
+			Groups:    []string{},
 		}
+
+		for _, group := range e.GetAttributeValues(oa.Config.LDAPConfig.GroupAttribute) {
+			for _, base := range oa.Config.LDAPConfig.GroupDN {
+				if strings.HasSuffix(strings.ToLower(group), strings.ToLower(base)) {
+					group = group[:len(group)-len(base)-1]
+					bits := strings.SplitN(group, "=", 2)
+					if len(bits) == 2 {
+						group = bits[1]
+
+						// only get the first one
+						if strings.Contains(group, ",") {
+							bits = strings.Split(group, ",")
+							group = bits[0]
+						}
+
+						user.Groups = append(user.Groups, bits[1])
+					}
+
+					break
+				}
+			}
+		}
+
 		log.Debugf("Found entry: %s", e.DN)
 		return &user, nil
 	}
@@ -115,6 +150,7 @@ func (oa *OutbackApp) ldapAttributes() []string {
 	return []string{
 		"cn", "sn", "givenName", "mail",
 		oa.Config.LDAPConfig.UsernameAttribute,
+		oa.Config.LDAPConfig.GroupAttribute,
 	}
 }
 

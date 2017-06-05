@@ -2,3 +2,5 @@ config.toml
 *.pem
 metadata/*.xml
 saml
+plugins/*.so
+outback

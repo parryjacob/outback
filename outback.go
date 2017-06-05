@@ -19,19 +19,24 @@ type OutbackApp struct {
 	ldap                    *ldap.Conn
 	redis                   *redis.Client
 	templates               *template.Template
+	pluginManager           *pluginManager
+	assertionMaker          *OutbackAssertionMaker
 }
 
 // New creates and returns a new OutbackApp given a configuration path
 func New(configPath string) (*OutbackApp, error) {
-	oa := &OutbackApp{
-		ldap: nil,
-	}
+	oa := &OutbackApp{}
+
 	if err := oa.loadConfig(configPath); err != nil {
 		return nil, err
 	}
 
 	if oa.Config.Debug {
 		log.SetLevel(log.DebugLevel)
+	}
+
+	if err := oa.loadPlugins(oa.Config.PluginDirectory); err != nil {
+		return nil, err
 	}
 
 	oa.serviceProviderProvider = &OutbackServiceProviderProvider{}
@@ -43,6 +48,10 @@ func New(configPath string) (*OutbackApp, error) {
 		oa: oa,
 	}
 
+	oa.assertionMaker = &OutbackAssertionMaker{
+		oa: oa,
+	}
+
 	mdurl, _ := url.Parse("metadata")
 	ssourl, _ := url.Parse("sso")
 
@@ -50,11 +59,15 @@ func New(configPath string) (*OutbackApp, error) {
 		Key:                     oa.Config.PrivateKey,
 		Certificate:             oa.Config.Certificate,
 		ServiceProviderProvider: oa.serviceProviderProvider,
-		AssertionMaker:          OutbackAssertionMaker{},
+		AssertionMaker:          oa.assertionMaker,
 		MetadataURL:             *oa.Config.BaseURL.ResolveReference(mdurl),
 		SSOURL:                  *oa.Config.BaseURL.ResolveReference(ssourl),
 		Logger:                  log.New(),
 		SessionProvider:         oa.sessionProvider,
+	}
+
+	if err := oa.pluginManager.findPluginMethods(); err != nil {
+		return nil, err
 	}
 
 	return oa, nil

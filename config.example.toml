@@ -12,6 +12,9 @@ CertFile="idp-cert.pem"
 # Location of SAML SP metadata (*.xml)
 MetadataDirectory="metadata"
 
+# Location of plugin directory
+PluginDirectory="plugins"
+
 # Debug logging
 Debug=false
 
@@ -35,6 +38,11 @@ LDAPUserFilter="(objectClass=user)"
 LDAPBaseDN=[
     "ou=people,dc=example,dc=com",
 ]
+# Groups found with the GroupAttribute above will only be included if they
+# have one of these DNs as their suffix
+LDAPGroupDN=[
+    "ou=public groups,dc=example,dc=com",
+]
 
 # Enable AD compatibility mode
 # This also requires that the bind user has been delegated the ability
@@ -57,3 +65,15 @@ PasswordMustSymbol=false
 # if true, we attempt to bind as the user to change their password
 # instead of doing it as the BindDN user
 PasswordChangeAsUser=true
+
+# All plugin configuration must be specified like this
+# The plugin name is _always_ the filename of the plugin
+# without the trailing .so
+[plugins.plugin_aws]
+AccountID="1234567890"      # AWS account ID, without dashes
+ProviderName="saml-idp"     # name of the identity provider configured in AWS
+
+    # Group-AWS Role mappings are defined as follows
+    [[plugins.plugin_aws.role]]
+    Group="admin"         # LDAP group
+    Role="saml-admin"     # AWS role name

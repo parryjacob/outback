@@ -25,7 +25,7 @@ type OutbackSession struct {
 
 // NewSessionFromLDAP creates a new session given an LDAP user
 func NewSessionFromLDAP(user *LDAPUser) *OutbackSession {
-	log.WithField("dn", user.DN).Debug("creating new session for user")
+	log.WithField("dn", user.DN).Debug("Creating new session for user")
 	return &OutbackSession{
 		ldapUser: user,
 		LDAPDN:   user.DN,
@@ -195,7 +195,7 @@ func (oa *OutbackApp) GetOutbackSession(w http.ResponseWriter, r *http.Request, 
 		if obSess == nil {
 			// no error but no cookie
 			oa.sendLoginForm(w, r, vars, "")
-			log.WithField("id", sessionCookie.Value).Debug("found cookie but missing redis session")
+			log.WithField("id", sessionCookie.Value).Debug("Found cookie but missing redis session")
 			return nil
 		}
 
