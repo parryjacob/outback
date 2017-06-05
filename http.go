@@ -117,6 +117,9 @@ func (oa *OutbackApp) serveHTTP() error {
 		r.HandleFunc("/changepw", oa.httpSSChangePassword)
 	}
 
+	// Static content
+	r.PathPrefix("/static").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
+
 	addr := oa.Config.ListenAddress + ":" + strconv.Itoa(oa.Config.Port)
 
 	srv := &http.Server{
