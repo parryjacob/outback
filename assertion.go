@@ -2,6 +2,7 @@ package outback
 
 import (
 	"regexp"
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/parryjacob/saml"
@@ -214,6 +215,15 @@ func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, sessi
 		})
 	}
 
+	remoteAddr := req.HTTPRequest.RemoteAddr
+	if ss := strings.Split(remoteAddr, ":"); true {
+		remoteAddr = ss[0]
+	}
+	xff := req.HTTPRequest.Header.Get("X-Forwarded-For")
+	if len(xff) > 0 {
+		remoteAddr = xff
+	}
+
 	req.Assertion = &saml.Assertion{
 		ID:           newSessionID(),
 		IssueInstant: saml.TimeNow(),
@@ -233,7 +243,7 @@ func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, sessi
 				saml.SubjectConfirmation{
 					Method: "urn:oasis:names:tc:SAML:2.0:cm:bearer",
 					SubjectConfirmationData: &saml.SubjectConfirmationData{
-						Address:      req.HTTPRequest.RemoteAddr,
+						Address:      remoteAddr,
 						InResponseTo: req.Request.ID,
 						NotOnOrAfter: saml.TimeNow().Add(saml.MaxIssueDelay),
 						Recipient:    req.ACSEndpoint.Location,
@@ -251,7 +261,7 @@ func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, sessi
 				AuthnInstant: session.CreateTime.UTC(),
 				SessionIndex: session.Index,
 				SubjectLocality: &saml.SubjectLocality{
-					Address: req.HTTPRequest.RemoteAddr,
+					Address: remoteAddr,
 				},
 				AuthnContext: saml.AuthnContext{
 					AuthnContextClassRef: &saml.AuthnContextClassRef{
