@@ -2,7 +2,6 @@ package outback
 
 import (
 	"regexp"
-	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/parryjacob/saml"
@@ -215,14 +214,7 @@ func (oam *OutbackAssertionMaker) MakeAssertion(req *saml.IdpAuthnRequest, sessi
 		})
 	}
 
-	remoteAddr := req.HTTPRequest.RemoteAddr
-	if ss := strings.Split(remoteAddr, ":"); true {
-		remoteAddr = ss[0]
-	}
-	xff := req.HTTPRequest.Header.Get("X-Forwarded-For")
-	if len(xff) > 0 {
-		remoteAddr = xff
-	}
+	remoteAddr := oam.oa.remoteAddr(req.HTTPRequest).String()
 
 	req.Assertion = &saml.Assertion{
 		ID:           newSessionID(),

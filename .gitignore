@@ -1,6 +1,15 @@
+# Local configuration
 config.toml
-*.pem
 metadata/*.xml
+
+# Symlinks
 saml
+gssapi
+
+# Compiled artifacts
 plugins/*.so
 outback
+
+# Security-related
+*.pem
+*.keytab

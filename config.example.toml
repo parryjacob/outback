@@ -52,6 +52,10 @@ LDAPActiveDirectory=false
 # Enable user self-serve features (password change)
 SelfServe=true
 
+# Trust the X-Forwarded-For headers (you should only enable this if you know
+# what that means)
+TrustXFF=false
+
 # Password policy
 # If implemented by the server, errors will be shown to the client
 # if their new password does not meet the server's requirements
@@ -65,6 +69,36 @@ PasswordMustSymbol=false
 # if true, we attempt to bind as the user to change their password
 # instead of doing it as the BindDN user
 PasswordChangeAsUser=true
+
+# Configure optional Kerberos/SPNEGO integration
+[kerberos]
+Enabled=true # Default: false
+
+# Path to your keytab
+Keytab="sso.keytab"
+
+# This is used to verify principals returned by SPNEGO
+Realm="EXAMPLE.COM"
+
+# SPNEGO will be disabled for any address listed in here
+# This is mostly useful for when you're behind a NAT gateway which is
+# incapable of adding the X-Forwarded-For headers to HTTP(s) requests
+NATGateways=[
+    "10.8.0.1",
+    "10.9.0.1"
+]
+
+# SPNEGO will only be enabled for addresses that we believe are in your
+# intranet. By default, this is all private address space:
+#   127.0.0.0/8     10.0.0.0/8  172.16.0.0/12
+#   192.168.0.0/16  fd00::/8    ::1/128
+# Setting this to an empty list will enable SPNEGO for all addresses.
+# If you wish to disable this you should probably just disable Kerberos
+# entirely.
+Intranet=[
+    "10.8.0.0/24",
+    "10.9.0.0/24"
+]
 
 # All plugin configuration must be specified like this
 # The plugin name is _always_ the filename of the plugin

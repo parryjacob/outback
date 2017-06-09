@@ -1,16 +1,42 @@
 package outback
 
 import (
+	"net"
 	"net/http"
 	"strconv"
 
 	"time"
+
+	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/parryjacob/saml"
 	"github.com/unrolled/render"
 )
+
+func (oa *OutbackApp) remoteAddr(r *http.Request) net.IP {
+	ra := r.RemoteAddr
+
+	if ss := strings.Split(ra, ":"); len(ss) > 1 {
+		ra = strings.Join(ss[:len(ss)-1], ":")
+	}
+
+	if oa.Config.TrustXFF {
+		xff := r.Header.Get("X-Forwarded-For")
+		if len(xff) > 0 {
+			ra = xff
+			if strings.Contains(ra, ",") {
+				ra = strings.Split(ra, ",")[0]
+			}
+		}
+	}
+
+	ra = strings.TrimSpace(ra)
+	ra = strings.Trim(ra, "[]")
+
+	return net.ParseIP(ra)
+}
 
 func (oa *OutbackApp) httpIDPList(w http.ResponseWriter, r *http.Request) {
 	sess := oa.sessionProvider.GetSession(w, r, nil)

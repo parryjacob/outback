@@ -4,6 +4,7 @@ import (
 	"net/url"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/apcera/gssapi"
 	"github.com/go-redis/redis"
 	"github.com/parryjacob/saml"
 	"github.com/unrolled/render"
@@ -21,6 +22,10 @@ type OutbackApp struct {
 	pluginManager           *pluginManager
 	assertionMaker          *OutbackAssertionMaker
 	render                  *render.Render
+
+	kerbLib     *gssapi.Lib
+	kerbService *gssapi.Name
+	kerbCred    *gssapi.CredId
 }
 
 // New creates and returns a new OutbackApp given a configuration path
@@ -87,6 +92,12 @@ func (oa *OutbackApp) Run() error {
 	if oa.Config.LDAPConfig.ActiveDirectory {
 		log.Info("Outback is operating in Active Directory compatibility mode")
 		log.Info("You must use an administrative user to bind to LDAP if you wish to use self-serve features")
+	}
+
+	if oa.Config.KerberosConfig.Enabled {
+		if err := oa.initKerberos(); err != nil {
+			return err
+		}
 	}
 
 	return oa.serveHTTP()

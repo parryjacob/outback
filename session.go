@@ -173,6 +173,7 @@ func (oa *OutbackApp) GetOutbackSession(w http.ResponseWriter, r *http.Request, 
 		}
 
 		// password is confirmed okay
+		log.Debugf("Authenticated %s via password", ldapuser.Username)
 		obSess := NewSessionFromLDAP(ldapuser)
 		if err := obSess.SaveSession(oa); err != nil {
 			oa.sendLoginForm(w, r, vars, "Failed to save session!")
@@ -203,6 +204,27 @@ func (oa *OutbackApp) GetOutbackSession(w http.ResponseWriter, r *http.Request, 
 		return obSess
 	}
 
+	if oa.Config.KerberosConfig.Enabled {
+		kerbUser, err := oa.attemptSPNEGO(w, r)
+		if err != nil {
+			log.WithError(err).Error("SPNEGO failed")
+		}
+
+		// We actually authenticated
+		if kerbUser != nil {
+			log.Debugf("Authenticated %s via SPNEGO", kerbUser.Username)
+
+			sesh := NewSessionFromLDAP(kerbUser)
+			if err := sesh.SaveSession(oa); err != nil {
+				oa.sendLoginForm(w, r, vars, "Failed to save SPNEGO session!")
+				log.WithError(err).Error("Failed to write SPNEGO session to redis!")
+				return nil
+			}
+			http.SetCookie(w, sesh.Cookie(oa))
+			return sesh
+		}
+	}
+
 	oa.sendLoginForm(w, r, vars, "")
 
 	return nil
@@ -229,7 +251,7 @@ func (oa *OutbackApp) sendLoginForm(w http.ResponseWriter, r *http.Request, vars
 	destURL.RawQuery = ""
 	//destURL = osp.oa.Config.BaseURL.ResolveReference(destURL)
 
-	if err := oa.RenderTemplate("login", w, struct {
+	if err := oa.RenderTemplateStatus("login", http.StatusUnauthorized, w, struct {
 		Message     string
 		URL         string
 		SAMLRequest string

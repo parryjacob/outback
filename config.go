@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/x509"
 	"errors"
+	"net"
 	"net/url"
 	"time"
 
@@ -30,8 +31,11 @@ type Config struct {
 	RedisURI          string
 	CookieLifetime    time.Duration
 	SelfServe         bool
+	TrustXFF          bool
 
 	SAMLProviderConfigs []OutbackSAMLProviderConfig
+
+	KerberosConfig *kerbConfig
 }
 
 type ldapConfig struct {
@@ -49,6 +53,16 @@ type ldapConfig struct {
 	ActiveDirectory   bool
 
 	PasswordPolicy *passwordPolicyConfig
+}
+
+type kerbConfig struct {
+	Enabled      bool
+	Keytab       string
+	Realm        string
+	Intranet     []string
+	intranetAddr []*net.IPNet
+	NATGateways  []string
+	natAddrs     []net.IP
 }
 
 type passwordPolicyConfig struct {
@@ -83,6 +97,7 @@ type configFile struct {
 	RedisURI              string
 	CookieLifetime        string
 	SelfServe             bool
+	TrustXFF              bool
 
 	PasswordMinLength    int
 	PasswordMustNumbers  bool
@@ -92,6 +107,7 @@ type configFile struct {
 
 	Plugins             map[string]toml.Primitive
 	SAMLProviderConfigs []OutbackSAMLProviderConfig `toml:"metadata"`
+	KerberosConfig      kerbConfig                  `toml:"kerberos"`
 }
 
 func (oa *OutbackApp) loadConfig(configPath string) (err error) {
@@ -126,6 +142,21 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 
 		Plugins:             map[string]toml.Primitive{},
 		SAMLProviderConfigs: []OutbackSAMLProviderConfig{},
+
+		KerberosConfig: kerbConfig{
+			Enabled: false,
+			Intranet: []string{
+				"127.0.0.0/8",
+				"10.0.0.0/8",
+				"172.16.0.0/12",
+				"192.168.0.0/16",
+				"fd00::/8",
+				"::1/128",
+			},
+			NATGateways: []string{},
+		},
+
+		TrustXFF: false,
 	}
 
 	tomlMeta, err := toml.DecodeFile(configPath, &c)
@@ -196,6 +227,20 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		return err
 	}
 
+	// parse kerberos subnets
+	c.KerberosConfig.intranetAddr = []*net.IPNet{}
+	for _, subnet := range c.KerberosConfig.Intranet {
+		_, ipnet, err := net.ParseCIDR(subnet)
+		if err != nil {
+			return err
+		}
+		c.KerberosConfig.intranetAddr = append(c.KerberosConfig.intranetAddr, ipnet)
+	}
+	c.KerberosConfig.natAddrs = []net.IP{}
+	for _, gw := range c.KerberosConfig.NATGateways {
+		c.KerberosConfig.natAddrs = append(c.KerberosConfig.natAddrs, net.ParseIP(gw))
+	}
+
 	// misc settings that don't require parsing
 	config.Port = c.Port
 	config.MetadataDirectory = c.MetadataDirectory
@@ -207,6 +252,8 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 	config.tomlMetadata = &tomlMeta
 	config.pluginConfig = c.Plugins
 	config.SAMLProviderConfigs = c.SAMLProviderConfigs
+	config.KerberosConfig = &c.KerberosConfig
+	config.TrustXFF = c.TrustXFF
 
 	oa.Config = &config
 
