@@ -59,6 +59,10 @@ func New(configPath string) (*OutbackApp, error) {
 		oa: oa,
 	}
 
+	samlTempl := &SAMLTemplateProvider{
+		oa: oa,
+	}
+
 	mdurl, _ := url.Parse("metadata")
 	ssourl, _ := url.Parse("sso")
 
@@ -71,6 +75,7 @@ func New(configPath string) (*OutbackApp, error) {
 		SSOURL:                  *oa.Config.BaseURL.ResolveReference(ssourl),
 		Logger:                  log.New(),
 		SessionProvider:         oa.sessionProvider,
+		TemplateProvider:        samlTempl,
 	}
 
 	if err := oa.pluginManager.findPluginMethods(); err != nil {

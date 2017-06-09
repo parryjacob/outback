@@ -1,0 +1,10 @@
+{{ define "title-saml_redirect" }}Redirecting{{ end }}
+
+<form method="POST" action="{{.URL}}" id="SAMLResponseForm">
+    <input type="hidden" name="SAMLResponse" value="{{.SAMLResponse}}" />
+    <input type="hidden" name="RelayState" value="{{.RelayState}}" />
+    <input type="submit" value="Continue" />
+</form>
+<script type="text/javascript">
+    document.getElementById('SAMLResponseForm').submit();
+</script>
