@@ -114,6 +114,12 @@ func (oa *OutbackApp) httpLogout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (oa *OutbackApp) httpFakeSLO(w http.ResponseWriter, r *http.Request) {
+	if err := oa.RenderTemplate("sp_logout", w, nil); err != nil {
+		panic(err)
+	}
+}
+
 func (oa *OutbackApp) serveHTTP() error {
 	oa.render = render.New(render.Options{
 		IsDevelopment: oa.Config.Debug,
@@ -128,6 +134,7 @@ func (oa *OutbackApp) serveHTTP() error {
 	// Basic SSO
 	r.HandleFunc("/metadata", oa.idp.ServeMetadata)
 	r.HandleFunc("/sso", oa.idp.ServeSSO)
+	r.HandleFunc("/slo", oa.httpFakeSLO)
 
 	// IdP Initiated flow
 	r.HandleFunc("/sps", oa.httpIDPList)
