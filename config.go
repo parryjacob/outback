@@ -25,6 +25,8 @@ type Config struct {
 	Port              int
 	MetadataDirectory string
 	PluginDirectory   string
+	TemplateDirectory string
+	StaticDirectory   string
 	Debug             bool
 	ListenAddress     string
 	LDAPConfig        *ldapConfig
@@ -80,6 +82,8 @@ type configFile struct {
 	Port                  int
 	MetadataDirectory     string
 	PluginDirectory       string
+	TemplateDirectory     string
+	StaticDirectory       string
 	Debug                 bool
 	ListenAddress         string
 	LDAPHost              string
@@ -118,6 +122,8 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		Port:                  80,
 		MetadataDirectory:     "metadata",
 		PluginDirectory:       "plugins",
+		TemplateDirectory:     "templates",
+		StaticDirectory:       "static",
 		Debug:                 false,
 		ListenAddress:         "127.0.0.1",
 		LDAPHost:              "127.0.0.1",
@@ -254,6 +260,8 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 	config.SAMLProviderConfigs = c.SAMLProviderConfigs
 	config.KerberosConfig = &c.KerberosConfig
 	config.TrustXFF = c.TrustXFF
+	config.TemplateDirectory = c.TemplateDirectory
+	config.StaticDirectory = c.StaticDirectory
 
 	oa.Config = &config
 

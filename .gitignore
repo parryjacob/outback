@@ -9,7 +9,11 @@ gssapi
 # Compiled artifacts
 plugins/*.so
 outback
+cmd/debug
 
 # Security-related
 *.pem
 *.keytab
+
+# Editor files
+.vscode/

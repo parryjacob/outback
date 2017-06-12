@@ -124,6 +124,7 @@ func (oa *OutbackApp) serveHTTP() error {
 	oa.render = render.New(render.Options{
 		IsDevelopment: oa.Config.Debug,
 		Layout:        "layouts/base",
+		Directory:     oa.Config.TemplateDirectory,
 	})
 
 	r := mux.NewRouter()
@@ -146,7 +147,7 @@ func (oa *OutbackApp) serveHTTP() error {
 	}
 
 	// Static content
-	r.PathPrefix("/static").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
+	r.PathPrefix("/static").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(oa.Config.StaticDirectory))))
 
 	addr := oa.Config.ListenAddress + ":" + strconv.Itoa(oa.Config.Port)
 
