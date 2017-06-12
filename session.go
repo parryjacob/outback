@@ -265,10 +265,12 @@ func (oa *OutbackApp) sendLoginForm(w http.ResponseWriter, r *http.Request, vars
 	}
 }
 
+var samlEncoding = base64.NewEncoding("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+
 func newSessionID() string {
 	rv := make([]byte, 24)
 	if _, err := saml.RandReader.Read(rv); err != nil {
 		panic(err)
 	}
-	return base64.StdEncoding.EncodeToString(rv)
+	return samlEncoding.EncodeToString(rv)
 }
