@@ -53,6 +53,7 @@ type ldapConfig struct {
 	UserFilter        string
 	RootCA            *x509.Certificate
 	ActiveDirectory   bool
+	AllowInsecure     bool
 
 	PasswordPolicy *passwordPolicyConfig
 }
@@ -98,6 +99,7 @@ type configFile struct {
 	LDAPGroupAttribute    string
 	LDAPRootCA            string
 	LDAPActiveDirectory   bool
+	LDAPAllowInsecure     bool
 	RedisURI              string
 	CookieLifetime        string
 	SelfServe             bool
@@ -138,6 +140,7 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		LDAPGroupAttribute:    "memberOf",
 		LDAPRootCA:            "",
 		LDAPActiveDirectory:   false,
+		LDAPAllowInsecure:     false,
 		SelfServe:             false,
 
 		PasswordMinLength:    8,
@@ -204,6 +207,7 @@ func (oa *OutbackApp) loadConfig(configPath string) (err error) {
 		UserFilter:        c.LDAPUserFilter,
 		GroupAttribute:    c.LDAPGroupAttribute,
 		ActiveDirectory:   c.LDAPActiveDirectory,
+		AllowInsecure:     c.LDAPAllowInsecure,
 		PasswordPolicy: &passwordPolicyConfig{
 			MinLength:  c.PasswordMinLength,
 			Capitals:   c.PasswordMustCapital,

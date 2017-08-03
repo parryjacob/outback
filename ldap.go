@@ -52,7 +52,7 @@ func (oa *OutbackApp) getLDAP(bind bool) (conn *ldap.Conn, err error) {
 		rootPool.AddCert(oa.Config.LDAPConfig.RootCA)
 
 		tlsc := &tls.Config{
-			InsecureSkipVerify: false,
+			InsecureSkipVerify: oa.Config.LDAPConfig.AllowInsecure,
 			RootCAs:            rootPool,
 			ServerName:         oa.Config.LDAPConfig.Host,
 		}

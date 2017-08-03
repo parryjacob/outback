@@ -27,6 +27,7 @@ LDAPHost="127.0.0.1" # If using LDAPS, this will be used to verify the server's 
 LDAPPort=389
 LDAPS=false
 LDAPRootCA="ldap-root.pem" # Must be provided if LDAPS is true
+LDAPAllowInsecure=false # This will allow non-matching, invalid, expired, etc certificates
 
 # if PasswordChangeAsUser=false, then this should be an
 # administrative user who can modify the password attributes
